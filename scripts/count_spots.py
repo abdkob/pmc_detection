@@ -216,9 +216,7 @@ def quantify_expression(
     (np.ndarray, dict)
         np.ndarray: positions of all identified mRNA molecules.
         dict: dictionary containing the number of molecules contained in each labeled region.
-    """
-
-    limits = select_signal(fish_img)
+    """raw_img.metadata["attributes"].bitsPerComponentSignificant
     cropped_img = skimage.img_as_float64(
         exposure.rescale_intensity(
             crop_to_selection(fish_img, limits),
