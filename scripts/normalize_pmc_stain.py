@@ -57,8 +57,8 @@ if __name__ == "__main__":
         channel = get_channel_index(
             snakemake.params["channels"], snakemake.params["channel_name"]
         )
-        z_start = snakemake.params["z_start"]
-        z_stop = snakemake.params["z_end"]
+        z_start = int(snakemake.params["z_start"])
+        z_stop = int(snakemake.params["z_end"])
         pmc = img[channel, z_start:z_stop, :, :]
         pmc = np.array(
             [
