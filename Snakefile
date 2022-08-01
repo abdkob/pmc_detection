@@ -2,8 +2,7 @@ import os
 import pandas as pd
 
 
-# configfile: "files/config.yaml"
-configfile: "/projectnb/bradham/workflows/indrops_hcr/files/detection_config.yaml"
+configfile: "files/config.yaml"
 
 
 OUTDIR = config["output"]["dir"]
