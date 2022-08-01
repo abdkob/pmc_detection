@@ -1,0 +1,15 @@
+name: hcr_quant
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python=3.6
+  - xarray
+  - pip:
+    - h5py
+    - big-fish
+    - scikit-image
+    - scikit-learn
+    - numpy
+    - nd2reader

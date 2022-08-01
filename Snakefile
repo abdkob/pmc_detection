@@ -36,7 +36,7 @@ rule normalize_pmc_stains:
     output:
         h5=temp(os.path.join(OUTDIR, "pmc_norm", "{embryo}.h5"),)
     conda:
-        "envs/preprocess.yaml"
+        "envs/hcr_quant.yaml"
     script:
         "scripts/normalize_pmc_stain.py"
 
@@ -68,7 +68,7 @@ rule label_pmcs:
     log:
         log=os.path.join("logs", "labels", "{embryo}.log"),
     conda:
-        "envs/preprocess.yaml"
+        "envs/hcr_quant.yaml"
     script:
         "scripts/label_pmcs.py"
 
@@ -88,7 +88,7 @@ rule quantify_expression:
     log:
         "logs/quant/{embryo}.log",
     conda:
-        "envs/quant.yaml"
+        "envs/hcr_quant.yaml"
     script:
         "scripts/count_spots.py"
 
