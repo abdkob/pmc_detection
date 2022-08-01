@@ -2,11 +2,15 @@
 #
 # Takes as input any microscopy image file, outputs an .h5 file
 # to be used as input for ilastik PMC segmentation
+import sys
+import os
 
 import h5py
 import numpy as np
-from aicsimageio import AICSImage
 from skimage import exposure
+
+sys.path.append(os.path.basename(__file__))
+import utils
 
 
 def get_channel_index(channels, channel):
@@ -15,11 +19,6 @@ def get_channel_index(channels, channel):
     ][0]
     return channel_index
 
-
-def to_hdf5(image, filename):
-    f = h5py.File(filename, "w")
-    dataset = f.create_dataset("image", image.shape, h5py.h5t.NATIVE_DOUBLE, data=image)
-    f.close()
 
 
 def preprocess_slice(img, upper_percentile=99.99, new_min=0, new_max=1):
@@ -54,18 +53,17 @@ if __name__ == "__main__":
     except NameError:
         snakemake = None
     if snakemake is not None:
-        print(snakemake.params)
-        img = AICSImage(snakemake.input["image"])
+        img, __ = utils.get_ND2_image_data(snakemake.input['image'])
         channel = get_channel_index(
             snakemake.params["channels"], snakemake.params["channel_name"]
         )
         z_start = snakemake.params["z_start"]
         z_stop = snakemake.params["z_end"]
-        pmc = img.get_image_data("ZYX", C=channel)[z_start:z_stop]
+        pmc = img[channel, z_start:z_stop, :, :]
         pmc = np.array(
             [
                 preprocess_slice(x, upper_percentile=100, new_min=0, new_max=1)
                 for x in pmc
             ]
         )
-        to_hdf5(pmc, snakemake.output["h5"])
+        utils.to_hdf5(pmc, snakemake.output["h5"])

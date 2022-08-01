@@ -316,18 +316,9 @@ def quantify_expression(
     )
 
 
-def get_channel_index(channels, channel):
-    """Get numerical index for channel of interest by searching a string of ';' separated channel names"""
-    channel_index = [
-        i for i, x in enumerate(channels.split(";")) if x.lower() == channel.lower()
-    ][0]
-    return channel_index
-
-
 if __name__ == "__main__":
     import h5py
     import pandas as pd
-    from aicsimageio import AICSImage
 
     try:
         snakemake
@@ -335,19 +326,19 @@ if __name__ == "__main__":
         snakemake = None
     if snakemake is not None:
         logging.basicConfig(filename=snakemake.log[0], level=logging.INFO)
-        raw_img = AICSImage(snakemake.input["image"])
+        raw_img, __ = utils.get_ND2_image_data(snakemake.input["image"])
         labels = np.array(h5py.File(snakemake.input["labels"], "r")["image"])
         logging.info("%d labels detected.", len(np.unique(labels) - 1))
         start = snakemake.params["z_start"]
         stop = snakemake.params["z_end"]
         gene_params = snakemake.params["gene_params"]
         genes = list(gene_params.keys())
-        channels = [get_channel_index(snakemake.params["channels"], x) for x in genes]
+        channels = [utils.get_channel_index(snakemake.params["channels"], x) for x in genes]
         fish_counts = {}
         summarized_images = [None] * len(channels)
         embryo = snakemake.wildcards["embryo"]
         for i, (gene, fish_channel) in enumerate(zip(genes, channels)):
-            fish_data = raw_img.get_image_data("ZYX", C=fish_channel)[start:stop, :, :]
+            fish_data = raw_img[fish_channel, start:stop, : , :]
             spots, quant, image = quantify_expression(
                 fish_data,
                 labels,
@@ -357,7 +348,7 @@ if __name__ == "__main__":
                 smooth_method="gaussian",
                 smooth_sigma=7,
                 verbose=False,
-                bits=raw_img.metadata["attributes"].bitsPerComponentSignificant,
+                bits=12,
             )
             fish_counts[f"{gene}_spots"] = quant["counts"]
             fish_counts[f"{gene}_intensity"] = quant["intensity"]
