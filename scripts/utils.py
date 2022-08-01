@@ -27,7 +27,8 @@ def get_channel_index(channels, channel):
     channel_index = [
         i for i, x in enumerate(channels.split(";")) if x.lower() == channel.lower()
     ][0]
-    return channel_index
+    assert int(channel_index) == channel_index
+    return int(channel_index)
 
 
 def to_hdf5(image, filename):
