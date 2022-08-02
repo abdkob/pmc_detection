@@ -4,12 +4,12 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  - python=3.6
-  - xarray
+  - python=3.9
+  - pip
+  - xarray=0.20.1
   - pip:
     - h5py
-    - big-fish
+    - big-fish==0.6.2
     - scikit-image
-    - scikit-learn
     - numpy
-    - nd2reader
+    - nd2reader==3.3.0
