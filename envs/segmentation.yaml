@@ -1,0 +1,15 @@
+name: segmentation
+channels:
+  - bioconda
+  - defaults
+dependencies:
+  - h5py=3.7.0
+  - numpy=1.22.*
+  - pandas=1.4.3
+  - pip=22.1.2
+  - python=3.9.12
+  - scikit-image=0.19.2
+  - xarray=0.20.1
+  - pip:
+    - nd2reader
+
