@@ -1,6 +1,8 @@
 import os
+import sys
 from collections import namedtuple
 import logging
+import itertools
 
 import numpy as np
 import xarray as xr
@@ -13,6 +15,11 @@ import bigfish.stack as bf_stack
 import bigfish.plot as bf_plot
 
 BoundingBox = namedtuple("BoundingBox", ["ymin", "ymax", "xmin", "xmax"])
+try:
+    sys.path.append(os.path.dirname(__file__))
+except NameError:
+    pass
+import utils
 
 
 def normalize_zstack(z_stack, bits):
@@ -216,7 +223,8 @@ def quantify_expression(
     (np.ndarray, dict)
         np.ndarray: positions of all identified mRNA molecules.
         dict: dictionary containing the number of molecules contained in each labeled region.
-    """raw_img.metadata["attributes"].bitsPerComponentSignificant
+    """
+    limits = select_signal(fish_img)
     cropped_img = skimage.img_as_float64(
         exposure.rescale_intensity(
             crop_to_selection(fish_img, limits),
@@ -324,23 +332,35 @@ if __name__ == "__main__":
         snakemake = None
     if snakemake is not None:
         logging.basicConfig(filename=snakemake.log[0], level=logging.INFO)
-        raw_img, __ = utils.get_ND2_image_data(snakemake.input["image"])
+        raw_img, dimensions = utils.get_ND2_image_data(
+            snakemake.input["image"], as_nm=True
+        )
         labels = np.array(h5py.File(snakemake.input["labels"], "r")["image"])
         logging.info("%d labels detected.", len(np.unique(labels) - 1))
-        start = snakemake.params["z_start"]
-        stop = snakemake.params["z_end"]
+        start = int(snakemake.params["z_start"])
+        stop = int(snakemake.params["z_end"])
         gene_params = snakemake.params["gene_params"]
-        genes = list(gene_params.keys())
-        channels = [utils.get_channel_index(snakemake.params["channels"], x) for x in genes]
+        channels = {
+            x: i
+            for i, x in enumerate(snakemake.params["channels"].split(";"))
+            if x != "pmc"
+        }
+        genes = list(channels.keys())
+        for each in channels.keys():
+            if each not in gene_params.keys():
+                raise ValueError(f"No entry for {each} found in gene parameters")
         fish_counts = {}
         summarized_images = [None] * len(channels)
         embryo = snakemake.wildcards["embryo"]
-        for i, (gene, fish_channel) in enumerate(zip(genes, channels)):
-            fish_data = raw_img[fish_channel, start:stop, : , :]
+        measures = ["spots", "intensity"]
+        print(channels)
+        print(labels.max())
+        for i, gene in enumerate(genes):
+            fish_data = raw_img[channels[gene], start:stop, :, :]
             spots, quant, image = quantify_expression(
                 fish_data,
                 labels,
-                voxel_size_nm=[x * 1000 for x in raw_img.physical_pixel_sizes],
+                voxel_size_nm=dimensions.tolist(),
                 dot_radius_nm=gene_params[gene]["radius"],
                 whitehat=True,
                 smooth_method="gaussian",
@@ -354,9 +374,11 @@ if __name__ == "__main__":
         # write summarized expression images to netcdf using Xarray to keep
         # track of dims
         out_image = np.array(summarized_images)
+        print(out_image.shape)
+        print(genes)
         xr.DataArray(
             data=out_image,
-            coords={"gene": genes, "measure": ["spots", "intensity"]},
+            coords={"gene": genes, "measure": measures},
             dims=["gene", "measure", "Z", "Y", "X"],
         ).to_netcdf(snakemake.output["image"])
         exprs_df = pd.DataFrame.from_dict(fish_counts)
@@ -393,9 +415,9 @@ if __name__ == "__main__":
                 "Z",
                 "Y",
                 "X",
-                "sm50_spots",
-                "sm50_intensity",
-                "pks2_spots",
-                "pks2_intensity",
+            ]
+            + [
+                f"{gene}_{measure}"
+                for (gene, measure) in itertools.product(genes, measures)
             ]
         ].to_csv(snakemake.output["csv"])
