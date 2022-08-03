@@ -3,7 +3,7 @@ import h5py
 import numpy as np
 
 # get image data from ND2 file
-def get_ND2_image_data(nd_file):
+def get_ND2_image_data(nd_file, as_nm=False):
     """Retrieve 3D image data as well as the z-scaling factor a confocal images."""
     images = ND2Reader(nd_file)
     channels = []
@@ -15,15 +15,16 @@ def get_ND2_image_data(nd_file):
     meta = images.metadata
     # I don't think this is the correct z-scale btw
     z_scale = raw_meta[b"SLxExperiment"][b"uLoopPars"][b"dZStep"]
-    z_scale = (meta["z_coordinates"][0] - meta["z_coordinates"][-1]) / (
-        images.sizes["z"] * meta["pixel_microns"]
-    )
+    dimensions = np.array([z_scale, meta["pixel_microns"], meta["pixel_microns"]])
+    if as_nm:
+        dimensions = dimensions * 10 ** 3
     arr = np.array(channels)
-    return arr, z_scale
+    return arr, dimensions
 
 
 def get_channel_index(channels, channel):
     """Get numerical index for channel of interest by searching a string of ';' separated channel names"""
+    print(channels, channel)
     channel_index = [
         i for i, x in enumerate(channels.split(";")) if x.lower() == channel.lower()
     ][0]
