@@ -353,8 +353,6 @@ if __name__ == "__main__":
         summarized_images = [None] * len(channels)
         embryo = snakemake.wildcards["embryo"]
         measures = ["spots", "intensity"]
-        print(channels)
-        print(labels.max())
         for i, gene in enumerate(genes):
             fish_data = raw_img[channels[gene], start:stop, :, :]
             spots, quant, image = quantify_expression(
@@ -374,8 +372,6 @@ if __name__ == "__main__":
         # write summarized expression images to netcdf using Xarray to keep
         # track of dims
         out_image = np.array(summarized_images)
-        print(out_image.shape)
-        print(genes)
         xr.DataArray(
             data=out_image,
             coords={"gene": genes, "measure": measures},
