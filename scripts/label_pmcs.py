@@ -1,4 +1,3 @@
-from tabnanny import check
 import h5py
 from matplotlib.pyplot import fill
 import numpy as np
