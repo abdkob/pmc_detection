@@ -1,3 +1,4 @@
+from multiprocessing.sharedctypes import Value
 import os
 import sys
 from collections import namedtuple
@@ -340,15 +341,26 @@ if __name__ == "__main__":
         start = int(snakemake.params["z_start"])
         stop = int(snakemake.params["z_end"])
         gene_params = snakemake.params["gene_params"]
+
+        def has_probe_info(name, gene_params):
+            if name not in gene_params.keys():
+                logging.warning(
+                    "No entry for %s found in gene parameters. Not quantifying signal",
+                    name,
+                )
+                return False
+            return True
+
         channels = {
             x: i
             for i, x in enumerate(snakemake.params["channels"].split(";"))
-            if x != "pmc"
+            if has_probe_info(x, gene_params)
         }
+        if len(channels) < 0:
+            raise ValueError(
+                f"No quantification parameters provided for channels: {snakemake.params['channels'].replace(';', ', ')}"
+            )
         genes = list(channels.keys())
-        for each in channels.keys():
-            if each not in gene_params.keys():
-                raise ValueError(f"No entry for {each} found in gene parameters")
         fish_counts = {}
         summarized_images = [None] * len(channels)
         embryo = snakemake.wildcards["embryo"]
