@@ -52,7 +52,8 @@ rule predict_pmcs:
     log:
         os.path.join(OUTDIR, "logs", "prediction", "{embryo}.log"),
     shell:
-        "({params.ilastik_loc} --headless "
+        "cd $(dirname {params.ilastik_loc}); "
+        "(./run_ilastik.sh --headless "
         "--project={input.model} "
         "--output_format=hdf5 "
         "--output_filename_format={output} "
@@ -68,7 +69,7 @@ rule label_pmcs:
     log:
         log=os.path.join("logs", "labels", "{embryo}.log"),
     conda:
-        "envs/hcr_quant.yaml"
+        "envs/segmentation.yaml"
     script:
         "scripts/label_pmcs.py"
 
