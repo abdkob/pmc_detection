@@ -65,8 +65,8 @@ if __name__ == "__main__":
         z_stop = int(snakemake.params["z_end"])
         pmc = img[channel, z_start:z_stop, :, :]
         if snakemake.params["intensipy"]:
-            model = Intensify()
-            pmc = model.normalize(pmc)
+            model = Intensify(xy_norm=False, dy=29, dx=29)
+            pmc = model.normalize(pmc.astype(float))
         else:
             pmc = np.array(
                 [

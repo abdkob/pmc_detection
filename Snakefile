@@ -2,17 +2,17 @@ import os
 import pandas as pd
 
 
-configfile: "files/config.yaml"
+configfile: "files/chris_config.yaml"
 
 
 OUTDIR = config["output"]["dir"]
 
-
+FILE_TYPE = config['input']['filetype']
 # assumed unique row identify linking to embryo name
 embryo_log = pd.read_csv(config["input"]["logfile"], index_col=0)
 EMBRYOS = glob_wildcards(
     os.path.join(
-        config['input']['datadir'], "{embryo}.nd2"
+        config['input']['datadir'], "{embryo}" + f".{FILE_TYPE}"
     )
 ).embryo
 
@@ -27,13 +27,13 @@ def get_embryo_param(wc, col):
 
 rule normalize_pmc_stains:
     input:
-        image=os.path.join(config['input']['datadir'], "{embryo}.nd2"),
+        image=os.path.join(config['input']['datadir'], "{embryo}" + f".{FILE_TYPE}"),
     params:
         channel_name="pmc",
         channels=lambda wc: get_embryo_param(wc, "channel_order"),
         z_start=lambda wc: get_embryo_param(wc, "z-start"),
         z_end=lambda wc: get_embryo_param(wc, "z-end"),
-        itensipy=config['preprocessing']['intensipy']
+        intensipy=config['preprocessing']['intensipy']
     output:
         h5=temp(os.path.join(OUTDIR, "pmc_norm", "{embryo}.h5"),)
     conda:
@@ -77,7 +77,7 @@ rule label_pmcs:
 
 rule quantify_expression:
     input:
-        image=os.path.join(config['input']['datadir'], "{embryo}.nd2"),
+        image=os.path.join(config['input']['datadir'], "{embryo}" + f".{FILE_TYPE}"),
         labels=os.path.join(OUTDIR, "labels", "{embryo}_pmc_labels.h5"),
     params:
         gene_params=config["quant"]["genes"],
