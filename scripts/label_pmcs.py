@@ -386,7 +386,7 @@ def generate_labels(
     pmc_seg = filters.apply_hysteresis_threshold(pmc_probs, p_low, p_high)
     # seeds = measure.label(morphology.binary_opening(pmc_seg, selem=selem))
     seeds = measure.label(
-        np.array([morphology.binary_opening(x, selem=selem) for x in pmc_seg])
+        np.array([morphology.binary_opening(x, footprint=selem) for x in pmc_seg])
     )
     try:
         gradients = filters.sobel(stain, axis=0)
