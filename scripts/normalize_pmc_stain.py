@@ -9,6 +9,11 @@ import h5py
 import numpy as np
 from skimage import exposure
 
+try:
+    from intensipy import Intensify
+except ImportError:
+    pass
+
 sys.path.append(os.path.basename(__file__))
 import utils
 
@@ -59,10 +64,14 @@ if __name__ == "__main__":
         z_start = int(snakemake.params["z_start"])
         z_stop = int(snakemake.params["z_end"])
         pmc = img[channel, z_start:z_stop, :, :]
-        pmc = np.array(
-            [
-                preprocess_slice(x, upper_percentile=100, new_min=0, new_max=1)
-                for x in pmc
-            ]
-        )
+        if snakemake.params["intensipy"]:
+            model = Intensify()
+            pmc = model.normalize(pmc)
+        else:
+            pmc = np.array(
+                [
+                    preprocess_slice(x, upper_percentile=100, new_min=0, new_max=1)
+                    for x in pmc
+                ]
+            )
         utils.to_hdf5(pmc, snakemake.output["h5"])

@@ -15,3 +15,4 @@ dependencies:
     - numpy
     - nd2reader==3.3.0
     - oiffile
+    - intensipy
