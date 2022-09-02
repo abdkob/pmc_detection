@@ -1,4 +1,5 @@
 from nd2reader import ND2Reader
+import oiffile
 import h5py
 import numpy as np
 
@@ -13,13 +14,40 @@ def get_ND2_image_data(nd_file, as_nm=False):
         channels.append(images.get_frame(0))
     raw_meta = images.parser._raw_metadata.image_metadata
     meta = images.metadata
-    # I don't think this is the correct z-scale btw
     z_scale = raw_meta[b"SLxExperiment"][b"uLoopPars"][b"dZStep"]
+    # dimensions in micro meters
     dimensions = np.array([z_scale, meta["pixel_microns"], meta["pixel_microns"]])
     if as_nm:
         dimensions = dimensions * 10 ** 3
     arr = np.array(channels)
     return arr, dimensions
+
+
+# get image data from oif file
+def get_oif_z_scale(oif, as_nm):
+    info = oiffile.SettingsFile(oif)
+    axes = ["Axis 0 Parameters Common", "Axis 3 Parameters Common"]
+    units_per_pxl = [0, 0]
+    for i, axis in enumerate(axes):
+        units_per_pxl[i]["unit"] = (
+            info[axis]["EndPosition"] - info[axis]["StartPosition"]
+        ) / info[axis]["MaxSize"]
+        if info[axis]["PixUnit"] == "um" and as_nm:
+            units_per_pxl *= 1 / 10 ** 3
+    return np.array(units_per_pxl[[0]], units_per_pxl[axes[1]], units_per_pxl[axes[1]])
+
+
+def read_image_file(im_path, as_nm=False):
+    limits = [0, 2 ** 12 - 1]
+    if im_path.endswith(".oif"):
+        images = oiffile.imread(im_path)
+        dimensions = get_oif_z_scale(im_path, as_nm)
+    elif im_path.endswith(".nd2"):
+        images, dimensions = get_ND2_image_data(im_path, as_nm)
+    else:
+        raise IOError("Unsupported file type!")
+    print(images.shape)
+    return images, dimensions
 
 
 def get_channel_index(channels, channel):

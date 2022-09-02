@@ -333,7 +333,7 @@ if __name__ == "__main__":
         snakemake = None
     if snakemake is not None:
         logging.basicConfig(filename=snakemake.log[0], level=logging.INFO)
-        raw_img, dimensions = utils.get_ND2_image_data(
+        raw_img, dimensions = utils.read_image_file(
             snakemake.input["image"], as_nm=True
         )
         labels = np.array(h5py.File(snakemake.input["labels"], "r")["image"])

@@ -7,9 +7,11 @@ dependencies:
   - python=3.9
   - pip
   - xarray=0.20.1
+  - h5py
   - pip:
     - h5py
     - big-fish==0.6.2
     - scikit-image
     - numpy
     - nd2reader==3.3.0
+    - oiffile

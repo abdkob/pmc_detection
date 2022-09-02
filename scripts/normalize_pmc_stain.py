@@ -20,7 +20,6 @@ def get_channel_index(channels, channel):
     return channel_index
 
 
-
 def preprocess_slice(img, upper_percentile=99.99, new_min=0, new_max=1):
     """Preprocess a Z-slice by scaling and equalizing intensities.
 
@@ -53,7 +52,7 @@ if __name__ == "__main__":
     except NameError:
         snakemake = None
     if snakemake is not None:
-        img, __ = utils.get_ND2_image_data(snakemake.input['image'])
+        img, __ = utils.read_image_file(snakemake.input["image"])
         channel = get_channel_index(
             snakemake.params["channels"], snakemake.params["channel_name"]
         )
