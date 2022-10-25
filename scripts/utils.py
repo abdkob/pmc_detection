@@ -24,24 +24,23 @@ def get_ND2_image_data(nd_file, as_nm=False):
 
 
 # get image data from oif file
-def get_oif_z_scale(oif, as_nm):
+def get_oif_physical_dimensions(oif, as_nm=False):
     info = oiffile.SettingsFile(oif)
-    axes = ["Axis 0 Parameters Common", "Axis 3 Parameters Common"]
-    units_per_pxl = [0, 0]
+    # Z, Y, X direction
+    axes = ["Axis 3 Parameters Common", "Axis 1 Parameters Common", "Axis 0 Parameters Common"]
+    units_per_pxl = [0, 0, 0]
     for i, axis in enumerate(axes):
-        units_per_pxl[i]["unit"] = (
-            info[axis]["EndPosition"] - info[axis]["StartPosition"]
-        ) / info[axis]["MaxSize"]
+        units_per_pxl[i] = (info[axis]["EndPosition"] - info[axis]["StartPosition"]) / info[axis]["MaxSize"]
         if info[axis]["PixUnit"] == "um" and as_nm:
-            units_per_pxl *= 1 / 10 ** 3
-    return np.array(units_per_pxl[[0]], units_per_pxl[axes[1]], units_per_pxl[axes[1]])
+            units_per_pxl[i] *= 1 / 10 ** 3
+    return np.array(units_per_pxl)
 
 
 def read_image_file(im_path, as_nm=False):
     limits = [0, 2 ** 12 - 1]
     if im_path.endswith(".oif"):
         images = oiffile.imread(im_path)
-        dimensions = get_oif_z_scale(im_path, as_nm)
+        dimensions = get_oif_physical_dimensions(im_path, as_nm)
     elif im_path.endswith(".nd2"):
         images, dimensions = get_ND2_image_data(im_path, as_nm)
     else:

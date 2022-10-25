@@ -2,11 +2,10 @@ import os
 import pandas as pd
 
 
-configfile: "files/config.yaml"
+configfile: "files/chris_config.yaml"
 
 
 OUTDIR = config["output"]["dir"]
-
 
 # assumed unique row identify linking to embryo name
 embryo_log = pd.read_csv(config["input"]["logfile"], index_col=0)
@@ -79,7 +78,7 @@ rule quantify_expression:
     input:
         image=os.path.join(config["input"]["datadir"], "{embryo}.nd2"),
         labels=os.path.join(OUTDIR, "labels", "{embryo}_pmc_labels.h5"),
-    params:
+    params:        "echo $(pwd); "
         gene_params=config["quant"]["genes"],
         channels=lambda wc: get_embryo_param(wc, "channel_order"),
         z_start=lambda wc: get_embryo_param(wc, "z-start"),
