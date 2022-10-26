@@ -1,4 +1,4 @@
-from multiprocessing.sharedctypes import Value
+import json
 import os
 import sys
 from collections import namedtuple
@@ -176,6 +176,7 @@ def quantify_expression(
     decompose_beta=1,
     decompose_gamma=5,
     bits=12,
+    crop_image=True,
     verbose=False,
 ):
     """
@@ -216,6 +217,8 @@ def quantify_expression(
     bits : int, optional
         Bit depth of original image. Used for scaling image while maintaining
         ob
+    crop_image : bool, optional
+        Whether to crop signal. Default is True.
     verbose : bool, optional
         Whether to verbosely print results and progress.
 
@@ -225,7 +228,13 @@ def quantify_expression(
         np.ndarray: positions of all identified mRNA molecules.
         dict: dictionary containing the number of molecules contained in each labeled region.
     """
-    limits = select_signal(fish_img)
+    if crop_image:
+        limits = select_signal(fish_img)
+    else:
+        # create BoudndingBox that selects whole image
+        limits = BoundingBox(
+            ymin=0, ymax=fish_img.shape[1], xmin=0, xmax=fish_img.shape[2]
+        )
     cropped_img = skimage.img_as_float64(
         exposure.rescale_intensity(
             crop_to_selection(fish_img, limits),
@@ -336,10 +345,16 @@ if __name__ == "__main__":
         raw_img, dimensions = utils.read_image_file(
             snakemake.input["image"], as_nm=True
         )
+        if dimensions is None and snakemake.input["image"].endswith(".h5"):
+            with open(snakemake.input["dimensions"], "r") as handle:
+                data = json.load(handle)
+                dimensions = [data[c] for c in "zyx"]
         labels = np.array(h5py.File(snakemake.input["labels"], "r")["image"])
         logging.info("%d labels detected.", len(np.unique(labels) - 1))
         start = int(snakemake.params["z_start"])
         stop = int(snakemake.params["z_end"])
+        if stop < 0:
+            stop = raw_img.shape[1]
         gene_params = snakemake.params["gene_params"]
 
         def has_probe_info(name, gene_params):
