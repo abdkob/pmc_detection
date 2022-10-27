@@ -78,11 +78,12 @@ rule quantify_expression:
     input:
         image=os.path.join(config["input"]["datadir"], "{embryo}.nd2"),
         labels=os.path.join(OUTDIR, "labels", "{embryo}_pmc_labels.h5"),
-    params:        "echo $(pwd); "
+    params:
         gene_params=config["quant"]["genes"],
         channels=lambda wc: get_embryo_param(wc, "channel_order"),
         z_start=lambda wc: get_embryo_param(wc, "z-start"),
         z_end=lambda wc: get_embryo_param(wc, "z-end"),
+        crop_image=True,
     output:
         image=os.path.join(OUTDIR, "expression", "{embryo}.nc"),
         csv=os.path.join(OUTDIR, "counts", "{embryo}.csv"),
