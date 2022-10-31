@@ -239,11 +239,13 @@ def count_spots(
         cell_label = cell_labels[spot_coord]
         if cell_label != 0:
             counts[cell_label] += 1
-            expression_3d[spot_coord] += 1
+    for region in measure.regionprops(cell_labels):
+        expression_3d[region.slice][region.image] = counts[region.label]
     return counts, expression_3d
 
 
 def average_intensity(smoothed_signal, cell_labels):
+    n_labels = len(np.unique(cell_labels)) - 1
     intensities = {i: 0 for i in range(1, n_labels + 1)}
     z_normed_smooth = (smoothed_signal - smoothed_signal.mean()) / smoothed_signal.std()
     expression_3d = np.zeros_like(z_normed_smooth)
@@ -370,7 +372,7 @@ def quantify_expression(
             decompose_gamma=decompose_gamma,
             verbose=verbose,
         )
-        quant["counts"] = counts
+        quant["spots"] = counts
         if crop_image:  # match original shape if cropped
             counts_3d = utils.pad_to_shape(counts_3d, fish_img.shape)
     if "intensity" in measures:
@@ -398,7 +400,6 @@ def get_quant_measure(method):
         raise ValueError(f"Unrecognized method {method}.")
 
 
-
 if __name__ == "__main__":
     import h5py
     import pandas as pd
@@ -415,7 +416,7 @@ if __name__ == "__main__":
         if dimensions is None and snakemake.input["image"].endswith(".h5"):
             with open(snakemake.params["dimensions"], "r") as handle:
                 data = json.load(handle)
-                dimensions = np.array([data[c] for c in "zyx"]) / 10 ** 3
+                dimensions = np.array([data[c] for c in "zyx"]) * (10 ** 3)
         labels = np.array(h5py.File(snakemake.input["labels"], "r")["image"])
         logging.info("%d labels detected.", len(np.unique(labels) - 1))
         start = int(snakemake.params["z_start"])
@@ -463,7 +464,7 @@ if __name__ == "__main__":
                 bits=12,
                 crop_image=snakemake.params["crop_image"],
             )
-            for each in measure:
+            for each in measures:
                 fish_exprs[f"{gene}_{each}"] = quant[each]
             summarized_images[i] = image
         # write summarized expression images to netcdf using Xarray to keep
