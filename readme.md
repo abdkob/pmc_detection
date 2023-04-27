@@ -1,10 +1,10 @@
 # PMC Detection in 3D confocal images
 
-This is a repository to perform automatic segmentation and detection of primary mesenchyme cells (PMCs) in 3D confocal images. The workflow uses [snakemake](https://snakemake.readthedocs.io/en/stable/) and assumes the existence of an trained [Ilastik](https://www.ilastik.org/) model for PMC pixel detection.
+This is a repository to perform automatic segmentation and detection of primary mesenchyme cells (PMCs) in 3D confocal images. The workflow uses [snakemake](https://snakemake.readthedocs.io/en/stable/) and assumes the existence of a trained [Ilastik](https://www.ilastik.org/) model for PMC pixel classification.
 
-The workflow begins by preprocessing immunolabeled PMC stains, performs semantic segmentation to identify individual cells, and then quantifies signal is in any sm-FISH channel in the original confocal image.
+The workflow begins by preprocessing immunolabeled PMC stains, performs semantic segmentation to identify individual cells, and then quantifies gene expression in each cell for any sm-FISH channel in the original confocal image.
 
-FISH signal is quantified using two methods: first, for absolute quantification, single-molecules are counted using [Big-FISH](https://github.com/fish-quant/big-fish); second, relative quantification is performed by calculating the average intensity of the FISH signal within each PMC as Z-scores. While absolute quantification via spot counting is ideal, in practice we found this approach difficult if the given gene is expressed to a high enough degree that individual puncta are not easily discernable. 
+FISH signal is quantified using two methods: first, for absolute quantification, single-molecules are counted using [Big-FISH](https://github.com/fish-quant/big-fish); second, relative quantification is performed by calculating the average intensity of the FISH signal within each PMC as Z-scores. While absolute quantification via spot counting is ideal, in practice we found this approach difficult if the given gene is expressed to a high enough degree that individual puncta are not easily discernable. The final output is a table of both PMC centroid coordinates, as well as gene expression measures for each cell and gene in the provided images. This will be written to a `.csv` file located at "<outdir>/final/counts.csv", where "<outdir>" is specified by the user.
 
 ## Installation
 
