@@ -4,6 +4,7 @@ ilastik:
 input:
   logfile: /home/dakota/Data/icat_embryos/Nahomie/Nahomie_icat_embryo_log.csv
   datadir: /home/dakota/Data/icat_embryos/Nahomie
+  filetype: nd2
 output:
   dir: data/
 quant:

@@ -2,7 +2,7 @@ import os
 import pandas as pd
 
 
-configfile: "files/chris_config.yaml"
+configfile: "files/config.yaml"
 
 
 OUTDIR = config["output"]["dir"]
