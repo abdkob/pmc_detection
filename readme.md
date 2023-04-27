@@ -30,8 +30,7 @@ ilastik:
   loc: # file path to run_ilastik.sh script 
 input:
   logfile: # file path to log file containing meta data for each image file
-  datadir: # directory containing 3D confocal images
-  filetype: # file extension for confocal images in `datadar` (i.e. "nd2" or "oif")
+  datadir: # directory containing '.nd2' 3D confocal images
 output:
   dir: # desired output directed
 quant:
