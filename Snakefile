@@ -7,14 +7,12 @@ configfile: "files/config.yaml"
 
 OUTDIR = config["output"]["dir"]
 
-FILE_TYPE = config['input']['filetype']
 # assumed unique row identify linking to embryo name
 embryo_log = pd.read_csv(config["input"]["logfile"], index_col=0)
 EMBRYOS = glob_wildcards(
-    os.path.join(
-        config['input']['datadir'], "{embryo}" + f".{FILE_TYPE}"
-    )
+    os.path.join(config["input"]["datadir"], "{embryo}.nd2")
 ).embryo
+
 
 rule all:
     input:
@@ -27,15 +25,17 @@ def get_embryo_param(wc, col):
 
 rule normalize_pmc_stains:
     input:
-        image=os.path.join(config['input']['datadir'], "{embryo}" + f".{FILE_TYPE}"),
+        image=os.path.join(config["input"]["datadir"], "{embryo}.nd2"),
     params:
         channel_name="pmc",
         channels=lambda wc: get_embryo_param(wc, "channel_order"),
         z_start=lambda wc: get_embryo_param(wc, "z-start"),
         z_end=lambda wc: get_embryo_param(wc, "z-end"),
-        intensipy=config['preprocessing']['intensipy']
+        itensipy=config["preprocessing"]["intensipy"],
     output:
-        h5=temp(os.path.join(OUTDIR, "pmc_norm", "{embryo}.h5"),)
+        h5=temp(
+            os.path.join(OUTDIR, "pmc_norm", "{embryo}.h5"),
+        ),
     conda:
         "envs/hcr_quant.yaml"
     script:
@@ -49,12 +49,11 @@ rule predict_pmcs:
     params:
         ilastik_loc=config["ilastik"]["loc"],
     output:
-        temp(os.path.join(OUTDIR, "pmc_probs", "{embryo}.h5"))
+        temp(os.path.join(OUTDIR, "pmc_probs", "{embryo}.h5")),
     log:
         os.path.join(OUTDIR, "logs", "prediction", "{embryo}.log"),
     shell:
-        "cd $(dirname {params.ilastik_loc}); "
-        "(./run_ilastik.sh --headless "
+        "({params.ilastik_loc} --headless "
         "--project={input.model} "
         "--output_format=hdf5 "
         "--output_filename_format={output} "
@@ -77,13 +76,15 @@ rule label_pmcs:
 
 rule quantify_expression:
     input:
-        image=os.path.join(config['input']['datadir'], "{embryo}" + f".{FILE_TYPE}"),
+        image=os.path.join(config["input"]["datadir"], "{embryo}.nd2"),
         labels=os.path.join(OUTDIR, "labels", "{embryo}_pmc_labels.h5"),
     params:
         gene_params=config["quant"]["genes"],
         channels=lambda wc: get_embryo_param(wc, "channel_order"),
         z_start=lambda wc: get_embryo_param(wc, "z-start"),
         z_end=lambda wc: get_embryo_param(wc, "z-end"),
+        crop_image=True,
+        quant_method="both",
     output:
         image=os.path.join(OUTDIR, "expression", "{embryo}.nc"),
         csv=os.path.join(OUTDIR, "counts", "{embryo}.csv"),
@@ -97,10 +98,7 @@ rule quantify_expression:
 
 rule combine_counts:
     input:
-        expand(
-            os.path.join(OUTDIR, "counts", "{embryo}.csv"),
-            embryo=EMBRYOS
-        )
+        expand(os.path.join(OUTDIR, "counts", "{embryo}.csv"), embryo=EMBRYOS),
     output:
         os.path.join(OUTDIR, "final", "counts.csv"),
     script:

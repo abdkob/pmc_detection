@@ -1,9 +1,10 @@
-from multiprocessing.sharedctypes import Value
+import json
 import os
 import sys
 from collections import namedtuple
 import logging
 import itertools
+from turtle import dot
 
 import numpy as np
 import xarray as xr
@@ -163,11 +164,103 @@ def preprocess_image(
     return bf_stack.cast_img_float64(np.stack(smoothed))
 
 
-def quantify_expression(
-    fish_img,
+def count_spots(
+    smoothed_signal,
     cell_labels,
     voxel_size_nm,
     dot_radius_nm,
+    smooth_method="gaussian",
+    decompose_alpha=0.5,
+    decompose_beta=1,
+    decompose_gamma=5,
+    verbose=False,
+):
+
+    if verbose:
+        spot_radius_px = bf_detection.get_object_radius_pixel(
+            voxel_size_nm=voxel_size_nm, object_radius_nm=dot_radius_nm, ndim=3
+        )
+        logging.info("spot radius (z axis): %0.3f pixels", spot_radius_px[0])
+        logging.info("spot radius (yx plan): %0.3f pixels", spot_radius_px[-1])
+    spots, threshold = bf_detection.detect_spots(
+        smoothed_signal,
+        return_threshold=True,
+        voxel_size=voxel_size_nm,
+        spot_radius=dot_radius_nm,
+    )
+    if verbose:
+        logging.info("%d spots detected...", spots.shape[0])
+        logging.info("plotting threshold optimization for spot detection...")
+        bf_plot.plot_elbow(
+            smoothed_signal,
+            voxel_size=voxel_size_nm,
+            spot_radius=dot_radius_nm,
+        )
+    decompose_cast = {
+        "gaussian": bf_stack.cast_img_uint16,
+        "log": bf_stack.cast_img_float64,
+    }
+    try:
+        (
+            spots_post_decomposition,
+            dense_regions,
+            reference_spot,
+        ) = bf_detection.decompose_dense(
+            decompose_cast[smooth_method](smoothed_signal),
+            spots,
+            voxel_size=voxel_size_nm,
+            spot_radius=dot_radius_nm,
+            alpha=decompose_alpha,  # alpha impacts the number of spots per candidate region
+            beta=decompose_beta,  # beta impacts the number of candidate regions to decompose
+            gamma=decompose_gamma,  # gamma the filtering step to denoise the image
+        )
+        logging.info(
+            "detected spots before decomposition: %d\n"
+            "detected spots after decomposition: %d",
+            spots.shape[0],
+            spots_post_decomposition.shape[0],
+        )
+        if verbose:
+            print(
+                f"detected spots before decomposition: {spots.shape[0]}\n"
+                f"detected spots after decomposition: {spots_post_decomposition.shape[0]}\n"
+                f"shape of reference spot for decomposition: {reference_spot.shape}"
+            )
+            bf_plot.plot_reference_spot(reference_spot, rescale=True)
+    except RuntimeError:
+        logging.warning("decomposition failed, using originally identified spots")
+        spots_post_decomposition = spots
+    n_labels = len(np.unique(cell_labels)) - 1
+    counts = {i: 0 for i in range(1, n_labels + 1)}
+    expression_3d = np.zeros_like(smoothed_signal)
+    # get slices to account for cropping
+    for each in spots_post_decomposition:
+        spot_coord = tuple(each)
+        cell_label = cell_labels[spot_coord]
+        if cell_label != 0:
+            counts[cell_label] += 1
+    for region in measure.regionprops(cell_labels):
+        expression_3d[region.slice][region.image] = counts[region.label]
+    return counts, expression_3d
+
+
+def average_intensity(smoothed_signal, cell_labels):
+    n_labels = len(np.unique(cell_labels)) - 1
+    intensities = {i: 0 for i in range(1, n_labels + 1)}
+    z_normed_smooth = (smoothed_signal - smoothed_signal.mean()) / smoothed_signal.std()
+    expression_3d = np.zeros_like(z_normed_smooth)
+    for region in measure.regionprops(cell_labels, z_normed_smooth):
+        intensities[region.label] = region.mean_intensity
+        expression_3d[region.slice][region.image] = region.mean_intensity
+    return intensities, expression_3d
+
+
+def quantify_expression(
+    fish_img,
+    cell_labels,
+    measures=["spots", "intensity"],
+    voxel_size_nm=None,
+    dot_radius_nm=None,
     whitehat=True,
     whitehat_selem=None,
     smooth_method="gaussian",
@@ -176,6 +269,7 @@ def quantify_expression(
     decompose_beta=1,
     decompose_gamma=5,
     bits=12,
+    crop_image=True,
     verbose=False,
 ):
     """
@@ -188,10 +282,15 @@ def quantify_expression(
     cell_labels : np.ndarray
         Integer array of same shape as `img` denoting regions to interest to quantify.
         Each separate region should be uniquely labeled.
-    voxel_size_nm : tuple(float, int)
-        Physical dimensions of each voxel in ZYX order.
-    dot_radius_nm : tuple(float, int)
-        Physical size of expected dots.
+    measures : list
+        Measures to use to quantify expression. Possible values are "spots",
+        "intensity", and ["spots", "intensity"]. Default is to measure both
+    voxel_size_nm : tuple(float, int), None
+        Physical dimensions of each voxel in ZYX order. Required if running spot
+        counting.
+    dot_radius_nm : tuple(float, int), None
+        Physical size of expected dots. Required if running spot
+        counting.
     whitehat : bool, optional
         Whether to perform white tophat filtering prior to image de-noising, by default True
     whitehat_selem : [int, np.ndarray], optional
@@ -216,6 +315,8 @@ def quantify_expression(
     bits : int, optional
         Bit depth of original image. Used for scaling image while maintaining
         ob
+    crop_image : bool, optional
+        Whether to crop signal. Default is True.
     verbose : bool, optional
         Whether to verbosely print results and progress.
 
@@ -225,7 +326,27 @@ def quantify_expression(
         np.ndarray: positions of all identified mRNA molecules.
         dict: dictionary containing the number of molecules contained in each labeled region.
     """
-    limits = select_signal(fish_img)
+    if (voxel_size_nm is None or dot_radius_nm is None) and "spots" in measures:
+        raise ValueError(
+            "Require `voxel_size_nm` and `dot_radius_nm` when performing spot counting."
+        )
+    if crop_image:
+        if verbose:
+            logging.info("Cropping image to signal")
+        limits = select_signal(fish_img)
+        if verbose:
+            logging.info(
+                "Cropped image to %d x %d",
+                {limits.ymax - limits.ymin},
+                {limits.xmax - limits.xmin},
+            )
+    else:
+        # create BoudndingBox that selects whole image
+        limits = BoundingBox(
+            ymin=0, ymax=fish_img.shape[1], xmin=0, xmax=fish_img.shape[2]
+        )
+    if verbose:
+        logging.info("Preprocessing image.")
     cropped_img = skimage.img_as_float64(
         exposure.rescale_intensity(
             crop_to_selection(fish_img, limits),
@@ -238,89 +359,45 @@ def quantify_expression(
     )
 
     cropped_labels = crop_to_selection(cell_labels, limits)
-    n_labels = len(np.unique(cell_labels)) - 1  # subtract one for background
-
-    if verbose:
-        spot_radius_px = bf_detection.get_object_radius_pixel(
-            voxel_size_nm=voxel_size_nm, object_radius_nm=dot_radius_nm, ndim=3
-        )
-        print("spot radius (z axis): {:0.3f} pixels".format(spot_radius_px[0]))
-        print("spot radius (yx plan): {:0.3f} pixels".format(spot_radius_px[-1]))
-    spots, threshold = bf_detection.detect_spots(
-        smoothed,
-        return_threshold=True,
-        voxel_size=voxel_size_nm,
-        spot_radius=dot_radius_nm,
-    )
-    if verbose:
-        print(f"{spots.shape[0]} spots detected...")
-        print("plotting threshold optimization for spot detection...")
-        bf_plot.plot_elbow(
+    quant = dict()
+    if "spots" in measures:
+        counts, counts_3d = count_spots(
             smoothed,
-            voxel_size=voxel_size_nm,
-            spot_radius=dot_radius_nm,
+            cropped_labels,
+            voxel_size_nm=voxel_size_nm,
+            dot_radius_nm=dot_radius_nm,
+            smooth_method=smooth_method,
+            decompose_alpha=decompose_alpha,
+            decompose_beta=decompose_beta,
+            decompose_gamma=decompose_gamma,
+            verbose=verbose,
         )
-    decompose_cast = {
-        "gaussian": bf_stack.cast_img_uint16,
-        "log": bf_stack.cast_img_float64,
-    }
-    try:
-        (
-            spots_post_decomposition,
-            dense_regions,
-            reference_spot,
-        ) = bf_detection.decompose_dense(
-            decompose_cast[smooth_method](smoothed),
-            spots,
-            voxel_size=voxel_size_nm,
-            spot_radius=dot_radius_nm,
-            alpha=decompose_alpha,  # alpha impacts the number of spots per candidate region
-            beta=decompose_beta,  # beta impacts the number of candidate regions to decompose
-            gamma=decompose_gamma,  # gamma the filtering step to denoise the image
-        )
-        logging.info(
-            "detected spots before decomposition: %d\n"
-            "detected spots after decomposition: %d",
-            spots.shape[0],
-            spots_post_decomposition.shape[0],
-        )
-        if verbose:
-            print(
-                f"detected spots before decomposition: {spots.shape[0]}\n"
-                f"detected spots after decomposition: {spots_post_decomposition.shape[0]}\n"
-                f"shape of reference spot for decomposition: {reference_spot.shape}"
-            )
-            bf_plot.plot_reference_spot(reference_spot, rescale=True)
-    except RuntimeError:
-        logging.warning("decomposition failed, using originally identified spots")
-        spots_post_decomposition = spots
-    each = spots[0]
-    counts = {i: 0 for i in range(1, n_labels + 1)}
-    expression_3d = np.zeros((2,) + fish_img.shape)
-    # get slices to account for cropping
-    yslice = slice(limits.ymin, limits.ymax)
-    xslice = slice(limits.xmin, limits.xmax)
-    for each in spots_post_decomposition:
-        spot_coord = tuple(each)
-        cell_label = cropped_labels[spot_coord]
-        if cell_label != 0:
-            counts[cell_label] += 1
-            expression_3d[0, :, yslice, xslice][spot_coord] += 1
-    intensities = {i: 0 for i in range(1, n_labels + 1)}
-    z_normed_smooth = (smoothed - smoothed.mean()) / smoothed.std()
-    for region in measure.regionprops(cropped_labels, z_normed_smooth):
-        intensities[region.label] = region.mean_intensity
-        expression_3d[1, :, yslice, xslice][region.slice][
-            region.image
-        ] = region.mean_intensity
-    # spots are in cropped coordinates, shift back to original
-    spots_post_decomposition[:, 1] += limits.ymin
-    spots_post_decomposition[:, 2] += limits.xmin
+        quant["spots"] = counts
+        if crop_image:  # match original shape if cropped
+            counts_3d = utils.pad_to_shape(counts_3d, fish_img.shape)
+    if "intensity" in measures:
+        intensities, intense_3d = average_intensity(smoothed, labels)
+        quant["intensity"] = intensities
+        if crop_image:  # match original shape if cropped
+            intense_3d = utils.pad_to_shape(intense_3d, fish_img.shape)
+    if len(measures) == 2:
+        expression_3d = np.stack([counts_3d, intense_3d])
     return (
-        spots_post_decomposition,
-        {"counts": counts, "intensity": intensities},
+        quant,
         expression_3d,
     )
+
+
+def get_quant_measure(method):
+    """Get method of quantification"""
+    if method == "spots":
+        return ["spots"]
+    elif method == "intensity":
+        return ["intensity"]
+    elif method == "both":
+        return ["spots", "intensity"]
+    else:
+        raise ValueError(f"Unrecognized method {method}.")
 
 
 if __name__ == "__main__":
@@ -336,10 +413,16 @@ if __name__ == "__main__":
         raw_img, dimensions = utils.read_image_file(
             snakemake.input["image"], as_nm=True
         )
+        if dimensions is None and snakemake.input["image"].endswith(".h5"):
+            with open(snakemake.params["dimensions"], "r") as handle:
+                data = json.load(handle)
+                dimensions = np.array([data[c] for c in "zyx"]) * (10 ** 3)
         labels = np.array(h5py.File(snakemake.input["labels"], "r")["image"])
         logging.info("%d labels detected.", len(np.unique(labels) - 1))
         start = int(snakemake.params["z_start"])
         stop = int(snakemake.params["z_end"])
+        if stop < 0:
+            stop = raw_img.shape[1]
         gene_params = snakemake.params["gene_params"]
 
         def has_probe_info(name, gene_params):
@@ -361,25 +444,28 @@ if __name__ == "__main__":
                 f"No quantification parameters provided for channels: {snakemake.params['channels'].replace(';', ', ')}"
             )
         genes = list(channels.keys())
-        fish_counts = {}
+        fish_exprs = {}
         summarized_images = [None] * len(channels)
         embryo = snakemake.wildcards["embryo"]
-        measures = ["spots", "intensity"]
+        measures = get_quant_measure(snakemake.params["quant_method"])
         for i, gene in enumerate(genes):
+            logging.info(f"Quantifying {gene} signal...")
             fish_data = raw_img[channels[gene], start:stop, :, :]
-            spots, quant, image = quantify_expression(
+            quant, image = quantify_expression(
                 fish_data,
                 labels,
+                measures=measures,
                 voxel_size_nm=dimensions.tolist(),
                 dot_radius_nm=gene_params[gene]["radius"],
                 whitehat=True,
                 smooth_method="gaussian",
                 smooth_sigma=7,
-                verbose=False,
+                verbose=True,
                 bits=12,
+                crop_image=snakemake.params["crop_image"],
             )
-            fish_counts[f"{gene}_spots"] = quant["counts"]
-            fish_counts[f"{gene}_intensity"] = quant["intensity"]
+            for each in measures:
+                fish_exprs[f"{gene}_{each}"] = quant[each]
             summarized_images[i] = image
         # write summarized expression images to netcdf using Xarray to keep
         # track of dims
@@ -389,7 +475,7 @@ if __name__ == "__main__":
             coords={"gene": genes, "measure": measures},
             dims=["gene", "measure", "Z", "Y", "X"],
         ).to_netcdf(snakemake.output["image"])
-        exprs_df = pd.DataFrame.from_dict(fish_counts)
+        exprs_df = pd.DataFrame.from_dict(fish_exprs)
         exprs_df.index.name = "label"
         physical_properties = (
             pd.DataFrame(
