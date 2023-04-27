@@ -31,7 +31,6 @@ rule normalize_pmc_stains:
         channels=lambda wc: get_embryo_param(wc, "channel_order"),
         z_start=lambda wc: get_embryo_param(wc, "z-start"),
         z_end=lambda wc: get_embryo_param(wc, "z-end"),
-        itensipy=config["preprocessing"]["intensipy"],
     output:
         h5=temp(
             os.path.join(OUTDIR, "pmc_norm", "{embryo}.h5"),
