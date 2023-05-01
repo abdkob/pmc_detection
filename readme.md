@@ -52,11 +52,15 @@ As noted above, the workflow expects a log file containing meta data fore ach im
 
 ## Implementation
 
-For complete implementation details, see our paper on ICAT [paper](https://www.biorxiv.org/content/10.1101/2022.05.26.493603v5)
+For complete implementation details, see our paper on ICAT [paper](https://doi.org/10.1093/bioinformatics/btad278)
 
 ## Citation
 
 If you used this pipeline in your work, please cite the original manuscript the workflow was developed for:
+
+Dakota Y Hawkins, Daniel T Zuch, James Huth, Nahomie Rodriguez-Sastre, Kelley R McCutcheon, Abigail Glick, Alexandra T Lion, Christopher F Thomas, Abigail E Descoteaux, W Evan Johnson, Cynthia A Bradham, ICAT: A Novel Algorithm to Robustly Identify Cell States Following Perturbations in Single Cell Transcriptomes, Bioinformatics, 2023;, btad278, https://doi.org/10.1093/bioinformatics/btad278
+
+### bibtex
 
 ```
 @article {Hawkins2022.05.26.493603,
