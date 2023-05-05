@@ -1,0 +1,17 @@
+ilastik:
+  model: {model_path}
+  loc: {ilastik_exec_path}
+
+input:
+  logfile: {log_file_path}
+  datadir: {data_dir_path}
+
+output:
+  dir: {output_dir_path}
+
+quant:
+  genes:
+    sm50:
+      radius: {sm50_radius}
+    pks2:
+      radius: {pks2_radius}
